@@ -48,6 +48,9 @@ const CLOUD_PROVIDERS: CloudProvider[] = [
     name: 'Anthropic',
     envKey: 'ANTHROPIC_API_KEY',
     models: [
+      { id: 'claude-opus-5-5', desc: 'Claude Opus 5.5 — most capable' },
+      { id: 'claude-sonnet-5-5', desc: 'Claude Sonnet 5.5 — balanced' },
+      { id: 'claude-haiku-5-5', desc: 'Claude Haiku 5.5 — fastest' },
       { id: 'claude-sonnet-4-6', desc: 'Claude Sonnet 4.6 — balanced' },
       { id: 'claude-opus-4-6', desc: 'Claude Opus 4.6 — most capable' },
       { id: 'claude-haiku-4-5', desc: 'Claude Haiku 4.5 — fastest' },
@@ -577,7 +580,7 @@ export function CommandPalette() {
           ) : tab === 'catalogue' ? (
             <span>Models are downloaded from the Ollama registry</span>
           ) : (
-            <span>API keys are stored locally and never sent to OpenJarvis servers</span>
+            <span>API keys are stored locally and never sent to Viernes servers</span>
           )}
         </div>
       </div>

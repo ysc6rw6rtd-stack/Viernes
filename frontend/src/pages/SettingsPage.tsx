@@ -37,6 +37,7 @@ import {
   type MemoryStats,
 } from '../lib/api';
 import { isAutoUpdateDisabled, setAutoUpdateDisabled } from '../components/Desktop/UpdateChecker';
+import { CLAUDE_MODELS } from '../components/InferenceSourceSetup';
 
 const CLOUD_KEY_STATUS_CHANGED = 'openjarvis-cloud-key-status-changed';
 
@@ -341,13 +342,16 @@ export function SettingsPage() {
   const [customModel, setCustomModel] = useState('');
   const [customEngine, setCustomEngine] = useState('lmstudio');
   const [customKey, setCustomKey] = useState('');
+  const [claudeModel, setClaudeModel] = useState('claude-opus-5-5');
+  const [claudeKey, setClaudeKey] = useState('');
   const [srcMsg, setSrcMsg] = useState('');
 
   useEffect(() => {
     getInferenceSource().then((s) => {
       setSrcKind(s.kind);
       if (s.host) setCustomHost(s.host);
-      if (s.model) setCustomModel(s.model);
+      if (s.model && s.kind === 'claude') setClaudeModel(s.model);
+      else if (s.model) setCustomModel(s.model);
       if (s.engine) setCustomEngine(s.engine);
     }).catch(() => {});
   }, []);
@@ -356,6 +360,8 @@ export function SettingsPage() {
     try {
       if (srcKind === 'custom') {
         await setInferenceSource({ kind: 'custom', host: customHost, model: customModel, engine: customEngine, apiKey: customKey || undefined });
+      } else if (srcKind === 'claude') {
+        await setInferenceSource({ kind: 'claude', model: claudeModel, apiKey: claudeKey || undefined });
       } else {
         await setInferenceSource({ kind: 'ollama' });
       }
@@ -480,7 +486,7 @@ export function SettingsPage() {
         <div className="flex flex-col gap-4">
           {/* Appearance */}
           <Section title="Appearance">
-            <SettingRow label="Theme" description="Choose how OpenJarvis looks">
+            <SettingRow label="Theme" description="Choose how Viernes looks">
               <div className="flex gap-1 p-0.5 rounded-lg" style={{ background: 'var(--color-bg-secondary)' }}>
                 {themeOptions.map((opt) => {
                   const isActive = settings.theme === opt.value;
@@ -596,8 +602,25 @@ export function SettingsPage() {
               >
                 <option value="ollama">Bundled Ollama (default)</option>
                 <option value="custom">Custom OpenAI-compatible server</option>
+                <option value="claude">Claude (Anthropic API)</option>
               </select>
             </SettingRow>
+            {srcKind === 'claude' && (
+              <>
+                <SettingRow label="Claude model" description="Opus is the most capable; Haiku is the cheapest">
+                  <select value={claudeModel} onChange={(e) => { setClaudeModel(e.target.value); setSrcMsg(''); }}
+                    className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
+                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }}>
+                    {CLAUDE_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                  </select>
+                </SettingRow>
+                <SettingRow label="Anthropic API key" description="Leave empty to keep the saved key">
+                  <input type="password" value={claudeKey} onChange={(e) => { setClaudeKey(e.target.value); setSrcMsg(''); }} placeholder="sk-ant-..." autoComplete="off"
+                    className="text-sm px-3 py-1.5 rounded-lg outline-none w-56"
+                    style={{ background: 'var(--color-bg-secondary)', color: 'var(--color-text)', border: '1px solid var(--color-border)' }} />
+                </SettingRow>
+              </>
+            )}
             {srcKind === 'custom' && (
               <>
                 <SettingRow label="Server URL" description="e.g. LM Studio: http://localhost:1234/v1">
@@ -979,7 +1002,7 @@ export function SettingsPage() {
           <Section title="About">
             <div className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
               <p className="mb-2">
-                <span className="font-semibold" style={{ color: 'var(--color-text)' }}>OpenJarvis</span> — Programming abstractions for on-device AI.
+                <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Viernes</span> — Programming abstractions for on-device AI.
               </p>
               <p className="text-xs" style={{ color: 'var(--color-text-tertiary)' }}>
                 Part of Intelligence Per Watt, a research initiative at Stanford SAIL.

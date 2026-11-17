@@ -138,7 +138,7 @@ export interface SetupStatus {
   server_ready: boolean;
   model_ready: boolean;
   error: string | null;
-  source: 'unconfigured' | 'ollama' | 'custom';
+  source: 'unconfigured' | 'ollama' | 'custom' | 'claude';
   requires_source: boolean;
 }
 
@@ -1099,7 +1099,7 @@ export async function getMemoryStats(): Promise<MemoryStats> {
   try {
     res = await apiFetch(`/v1/memory/stats`);
   } catch {
-    throw new Error('Could not reach the OpenJarvis API. Check the server status and API URL, then retry.');
+    throw new Error('Could not reach the Viernes API. Check the server status and API URL, then retry.');
   }
   if (!res.ok) {
     const detail = await memoryErrorDetail(res, 'Memory status request failed');
@@ -1182,7 +1182,7 @@ export async function denyAction(actionId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 export type InferenceSource = {
-  kind: 'ollama' | 'custom';
+  kind: 'ollama' | 'custom' | 'claude';
   model?: string;
   host?: string;
   engine?: string;

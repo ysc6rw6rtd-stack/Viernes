@@ -40,6 +40,9 @@ PRICING: Dict[str, tuple[float, float]] = {
     "claude-opus-4-6": (5.00, 25.00),
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-haiku-4-5": (1.00, 5.00),
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-haiku-5-5": (0.10, 0.50),
     "gemini-2.5-pro": (1.25, 10.00),
     "gemini-2.5-flash": (0.30, 2.50),
     "gemini-3-pro": (2.00, 12.00),
@@ -83,6 +86,9 @@ _OPENAI_MODELS = [
     "o3-mini",
 ]
 _ANTHROPIC_MODELS = [
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-haiku-5-5",
     "claude-sonnet-4-20250514",
     "claude-opus-4-20250514",
     "claude-haiku-3-5-20241022",
@@ -98,6 +104,15 @@ _ANTHROPIC_FIXED_SAMPLING_PREFIXES = (
     "claude-sonnet-5",
     "claude-fable-5",
     "claude-haiku-5-5",
+)
+# Models that reject a forced ``tool_choice`` ("any" / "tool") with a 400.
+_ANTHROPIC_NO_FORCED_TOOL_PREFIXES = (
+    "claude-opus-5-5",
+    "claude-sonnet-5-5",
+    "claude-fable-5-1",
+    "claude-fable-5-2",
+    "claude-mythos-5-1",
+    "claude-mythos-5-2",
 )
 _GOOGLE_MODELS = [
     "gemini-2.5-pro",
@@ -793,10 +808,22 @@ class CloudEngine(InferenceEngine):
                     create_kwargs["tools"] = [json_tool]
                 else:
                     create_kwargs["tools"].append(json_tool)
-                create_kwargs["tool_choice"] = {
-                    "type": "tool",
-                    "name": "json_output",
-                }
+                if model.startswith(_ANTHROPIC_NO_FORCED_TOOL_PREFIXES):
+                    # Forced tool_choice is rejected on these models; keep
+                    # the schema strict and steer toward the tool instead.
+                    json_tool["strict"] = True
+                    create_kwargs["tool_choice"] = {"type": "auto"}
+                    note = "Respond by calling the json_output tool."
+                    create_kwargs["system"] = (
+                        f"{create_kwargs['system']}\n\n{note}"
+                        if create_kwargs.get("system")
+                        else note
+                    )
+                else:
+                    create_kwargs["tool_choice"] = {
+                        "type": "tool",
+                        "name": "json_output",
+                    }
 
         t0 = time.monotonic()
         resp = self._anthropic_client.messages.create(**create_kwargs)

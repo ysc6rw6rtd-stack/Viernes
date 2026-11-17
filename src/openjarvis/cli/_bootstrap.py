@@ -71,7 +71,7 @@ def detect_cloud_keys() -> Optional[CloudProvider]:
 # Initial config writer
 # ---------------------------------------------------------------------------
 
-_DEFAULT_SOUL = "# Agent Persona\n\nYou are Jarvis, a helpful personal AI assistant.\n"
+_DEFAULT_SOUL = "# Agent Persona\n\nYou are Viernes, a helpful personal AI assistant.\n"
 _DEFAULT_MEMORY = "# Agent Memory\n\n"
 _DEFAULT_USER = "# User Profile\n\n"
 
@@ -188,7 +188,7 @@ def _seed_memory_files() -> None:
 # ship; bump them when sub-project A's release notes track new defaults.
 _CLOUD_PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "openrouter": "anthropic/claude-opus-4-6",
-    "anthropic": "claude-opus-4-6",
+    "anthropic": "claude-opus-5-5",
     "openai": "gpt-5",
     "google": "gemini-3-pro",
 }

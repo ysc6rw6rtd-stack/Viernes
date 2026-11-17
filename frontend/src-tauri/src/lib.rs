@@ -124,6 +124,37 @@ struct BootPlan {
 /// omits one (LM Studio is the canonical local server).
 const CUSTOM_FALLBACK_ENGINE: &str = "lmstudio";
 
+/// Folder (under the user's home) that holds Viernes' backend checkout.
+const APP_DIR_NAME: &str = "Viernes";
+
+/// Git repository the desktop app clones its backend from on first launch.
+const BACKEND_REPO_URL: &str = "https://github.com/VIERNES_OWNER/Viernes.git";
+
+/// Default Claude model when the user picks Anthropic's API as the source.
+const CLAUDE_DEFAULT_MODEL: &str = "claude-opus-5-5";
+
+/// Secure-storage key that holds the Anthropic API key.
+const CLAUDE_API_KEY_NAME: &str = "ANTHROPIC_API_KEY";
+
+/// Secure-storage key that a source's API key is saved under, if it has one.
+fn inference_credential_key(cfg: &InferenceConfig) -> Option<String> {
+    match cfg.kind {
+        SourceKind::Ollama => None,
+        SourceKind::Custom => Some(engine_api_key_name(
+            cfg.engine.as_deref().unwrap_or(CUSTOM_FALLBACK_ENGINE),
+        )),
+        SourceKind::Claude => Some(CLAUDE_API_KEY_NAME.to_string()),
+    }
+}
+
+fn source_kind_name(kind: SourceKind) -> &'static str {
+    match kind {
+        SourceKind::Ollama => "ollama",
+        SourceKind::Custom => "custom",
+        SourceKind::Claude => "claude",
+    }
+}
+
 /// Decide what to launch/pull/serve from the inference config + system RAM.
 /// Pure: no I/O, no spawning.
 fn boot_plan(cfg: &InferenceConfig, ram_gb: f64) -> BootPlan {
@@ -171,6 +202,26 @@ fn boot_plan(cfg: &InferenceConfig, ram_gb: f64) -> BootPlan {
                 serve_args: vec![
                     "--engine".into(),
                     engine,
+                    "--model".into(),
+                    model,
+                    "--agent".into(),
+                    "orchestrator".into(),
+                ],
+            }
+        }
+        SourceKind::Claude => {
+            let model = cfg
+                .model
+                .clone()
+                .filter(|m| !m.is_empty())
+                .unwrap_or_else(|| CLAUDE_DEFAULT_MODEL.to_string());
+            BootPlan {
+                launch_ollama: false,
+                model_to_pull: None,
+                engine_host: None,
+                serve_args: vec![
+                    "--engine".into(),
+                    "cloud".into(),
                     "--model".into(),
                     model,
                     "--agent".into(),
@@ -307,18 +358,18 @@ fn find_project_root() -> Option<std::path::PathBuf> {
     // 3. Fallback: well-known direct paths
     let home = home_dir();
     let direct = [
-        format!("{home}/OpenJarvis"),
-        format!("{home}/projects/hazy/OpenJarvis"),
-        format!("{home}/projects/OpenJarvis"),
-        format!("{home}/src/OpenJarvis"),
-        format!("{home}/Documents/OpenJarvis"),
-        format!("{home}/Desktop/OpenJarvis"),
-        format!("{home}/Developer/OpenJarvis"),
-        format!("{home}/dev/OpenJarvis"),
-        format!("{home}/Code/OpenJarvis"),
-        format!("{home}/code/OpenJarvis"),
-        format!("{home}/repos/OpenJarvis"),
-        format!("{home}/github/OpenJarvis"),
+        format!("{home}/Viernes"),
+        format!("{home}/projects/hazy/Viernes"),
+        format!("{home}/projects/Viernes"),
+        format!("{home}/src/Viernes"),
+        format!("{home}/Documents/Viernes"),
+        format!("{home}/Desktop/Viernes"),
+        format!("{home}/Developer/Viernes"),
+        format!("{home}/dev/Viernes"),
+        format!("{home}/Code/Viernes"),
+        format!("{home}/code/Viernes"),
+        format!("{home}/repos/Viernes"),
+        format!("{home}/github/Viernes"),
     ];
     for p in &direct {
         let path = std::path::PathBuf::from(p);
@@ -327,7 +378,7 @@ fn find_project_root() -> Option<std::path::PathBuf> {
         }
     }
 
-    // 4. Shallow scan: look for OpenJarvis one level inside common parent dirs.
+    // 4. Shallow scan: look for Viernes one level inside common parent dirs.
     //    This catches clones like ~/Documents/my-stuff/OpenJarvis without
     //    needing to enumerate every possible intermediate folder.
     let scan_parents = [
@@ -346,13 +397,13 @@ fn find_project_root() -> Option<std::path::PathBuf> {
         let parent_path = std::path::PathBuf::from(parent);
         if let Ok(entries) = std::fs::read_dir(&parent_path) {
             for entry in entries.flatten() {
-                let candidate = entry.path().join("OpenJarvis");
+                let candidate = entry.path().join(APP_DIR_NAME);
                 if candidate.join("pyproject.toml").exists() {
                     return Some(candidate);
                 }
-                // Also check if the entry itself is OpenJarvis (case-insensitive match)
+                // Also check if the entry itself is Viernes (case-insensitive match)
                 if let Some(name) = entry.file_name().to_str() {
-                    if name.eq_ignore_ascii_case("openjarvis")
+                    if name.eq_ignore_ascii_case(APP_DIR_NAME)
                         && entry.path().join("pyproject.toml").exists()
                     {
                         return Some(entry.path());
@@ -504,7 +555,7 @@ impl Default for SetupStatus {
     fn default() -> Self {
         Self {
             phase: "awaiting_source".into(),
-            detail: "Choose where OpenJarvis should run models.".into(),
+            detail: "Choose where Viernes should run models.".into(),
             ollama_ready: false,
             server_ready: false,
             model_ready: false,
@@ -520,11 +571,7 @@ impl SetupStatus {
         Self {
             phase: "starting".into(),
             detail: "Initializing...".into(),
-            source: match cfg.kind {
-                SourceKind::Ollama => "ollama",
-                SourceKind::Custom => "custom",
-            }
-            .into(),
+            source: source_kind_name(cfg.kind).into(),
             requires_source: false,
             ..Self::default()
         }
@@ -894,7 +941,7 @@ fn prepare_subprocess_for_appimage(cmd: &mut tokio::process::Command) {
 fn format_uv_sync_spawn_error(root: &std::path::Path, uv_bin: &str, err: &str) -> String {
     format!(
         "Could not run `uv sync`: {}. Verify uv is installed at \
-         `{}` and the OpenJarvis repo is at `{}`.",
+         `{}` and the Viernes repo is at `{}`.",
         err,
         uv_bin,
         root.display(),
@@ -1029,7 +1076,7 @@ fn port_owner_hint() -> String {
 fn format_port_unavailable(port: u16, reason: &str) -> String {
     format!(
         "Port {} is not available: {}. Stop the process using that port or \
-         change the OpenJarvis port, then relaunch.\n\nTo identify it:\n  {}",
+         change the Viernes port, then relaunch.\n\nTo identify it:\n  {}",
         port,
         reason,
         port_owner_hint(),
@@ -1063,11 +1110,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
     {
         let mut s = status.lock().await;
         *s = SetupStatus::starting(&cfg);
-        s.source = match cfg.kind {
-            SourceKind::Ollama => "ollama",
-            SourceKind::Custom => "custom",
-        }
-        .into();
+        s.source = source_kind_name(cfg.kind).into();
     }
 
     // For the Ollama path, model resolution may fall back to FALLBACK_MODEL; we
@@ -1197,6 +1240,13 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
             s.model_ready = true;
             s.detail = "Model ready.".into();
         }
+    } else if matches!(cfg.kind, SourceKind::Claude) {
+        // Claude via the Anthropic API: nothing to start or download. The key
+        // is injected into `jarvis serve` from secure storage below.
+        let mut s = status.lock().await;
+        s.ollama_ready = true;
+        s.model_ready = true;
+        s.detail = "Using Claude via the Anthropic API.".into();
     } else {
         // Custom OpenAI-compatible endpoint: never start Ollama, never download.
         let host = plan
@@ -1296,14 +1346,14 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
             return;
         }
 
-        let target_path = std::path::PathBuf::from(home_dir()).join("OpenJarvis");
+        let target_path = std::path::PathBuf::from(home_dir()).join(APP_DIR_NAME);
         let clone_target = target_path.display().to_string();
 
         // If the directory exists but is not a valid project, don't overwrite
         if target_path.exists() && !target_path.join("pyproject.toml").exists() {
             let mut s = status.lock().await;
             s.error = Some(format!(
-                "{} exists but is not a valid OpenJarvis project. \
+                "{} exists but is not a valid Viernes project. \
                  Remove it and relaunch, or set OPENJARVIS_ROOT to the correct path.",
                 clone_target,
             ));
@@ -1312,18 +1362,12 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
 
         {
             let mut s = status.lock().await;
-            s.detail = "Downloading OpenJarvis (first launch)...".into();
+            s.detail = "Downloading Viernes (first launch)...".into();
         }
 
         let mut clone_cmd = tokio::process::Command::new(&git_bin);
         clone_cmd
-            .args([
-                "clone",
-                "--depth",
-                "1",
-                "https://github.com/open-jarvis/OpenJarvis.git",
-                &clone_target,
-            ])
+            .args(["clone", "--depth", "1", BACKEND_REPO_URL, &clone_target])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::piped());
         prepare_subprocess_for_appimage(&mut clone_cmd);
@@ -1338,9 +1382,10 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     let mut s = status.lock().await;
                     s.error = Some(format!(
-                        "Failed to download OpenJarvis: {}. \
-                         Clone manually: git clone https://github.com/open-jarvis/OpenJarvis.git {}",
+                        "Failed to download Viernes: {}. \
+                         Clone manually: git clone {} {}",
                         stderr.trim(),
+                        BACKEND_REPO_URL,
                         clone_target,
                     ));
                     return;
@@ -1348,9 +1393,9 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                 Err(e) => {
                     let mut s = status.lock().await;
                     s.error = Some(format!(
-                        "Failed to download OpenJarvis: {}. \
-                         Clone manually: git clone https://github.com/open-jarvis/OpenJarvis.git {}",
-                        e, clone_target,
+                        "Failed to download Viernes: {}. \
+                         Clone manually: git clone {} {}",
+                        e, BACKEND_REPO_URL, clone_target,
                     ));
                     return;
                 }
@@ -1426,7 +1471,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                         Ok(true) => {
                             let mut s = status.lock().await;
                             s.error = Some(format!(
-                                "An API server is already running on port {}, but OpenJarvis cannot securely apply your new inference API key to a server it did not start. Stop that server, then try setup again.",
+                                "An API server is already running on port {}, but Viernes cannot securely apply your new inference API key to a server it did not start. Stop that server, then try setup again.",
                                 JARVIS_PORT,
                             ));
                             return;
@@ -1479,7 +1524,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                 s.error = Some(format!(
                     "Port {} is already in use by another service (it answered \
                      /health with HTTP {}). Stop that service or change the \
-                     OpenJarvis port, then relaunch.\n\nTo identify it:\n  {}",
+                     Viernes port, then relaunch.\n\nTo identify it:\n  {}",
                     JARVIS_PORT,
                     resp.status(),
                     port_owner_hint(),
@@ -1636,7 +1681,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
             let mut s = status.lock().await;
             s.error = Some(format!(
                 "Could not start jarvis server: {}. \
-                 Make sure uv is installed (https://astral.sh/uv) and the OpenJarvis repo is cloned at {}",
+                 Make sure uv is installed (https://astral.sh/uv) and the Viernes repo is cloned at {}",
                 e,
                 root.display(),
             ));
@@ -1681,7 +1726,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                     "Jarvis server exited (code {}) before becoming ready.\n\n\
                      No stderr output. Check that:\n\
                      1. uv is installed ({})\n\
-                     2. The OpenJarvis repo is at {}\n\
+                     2. The Viernes repo is at {}\n\
                      3. 'uv sync' completes in that directory",
                     code_str,
                     uv_bin,
@@ -1702,7 +1747,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                 format!(
                     "Jarvis server did not become ready within 10 minutes. Check that:\n\
                      1. uv is installed ({})\n\
-                     2. The OpenJarvis repo is at {}\n\
+                     2. The Viernes repo is at {}\n\
                      3. Run 'uv sync' in that directory",
                     uv_bin,
                     root.display(),
@@ -1765,7 +1810,7 @@ async fn start_backend(
 ) -> Result<(), String> {
     if read_configured_inference_config().is_none() {
         *status.lock().await = SetupStatus::default();
-        return Err("Choose an inference source before starting OpenJarvis.".into());
+        return Err("Choose an inference source before starting Viernes.".into());
     }
     let b = backend.inner().clone();
     let s = status.inner().clone();
@@ -2468,6 +2513,7 @@ async fn set_inference_source(
     let kind = match kind.as_str() {
         "ollama" => SourceKind::Ollama,
         "custom" => SourceKind::Custom,
+        "claude" => SourceKind::Claude,
         other => return Err(format!("Unknown inference source kind: {:?}", other)),
     };
     let cfg = InferenceConfig {
@@ -2486,6 +2532,15 @@ async fn set_inference_source(
         }
         if cfg.model.as_deref().unwrap_or("").is_empty() {
             return Err("A model name is required for a custom endpoint.".into());
+        }
+    }
+    if let SourceKind::Claude = cfg.kind {
+        let has_saved_key = matches!(
+            secure_store_get(CLAUDE_API_KEY_NAME),
+            Ok(Some(ref value)) if !value.is_empty()
+        );
+        if api_key.is_none() && !has_saved_key {
+            return Err("An Anthropic API key is required to use Claude.".into());
         }
     }
 
@@ -2535,6 +2590,7 @@ async fn delete_ollama_model(model_name: String) -> Result<serde_json::Value, St
 enum SourceKind {
     Ollama,
     Custom,
+    Claude,
 }
 
 impl Default for SourceKind {
@@ -2587,13 +2643,10 @@ struct PendingInferenceCredential {
 
 impl PendingInferenceCredential {
     fn for_config(cfg: &InferenceConfig) -> Option<Self> {
-        if cfg.confirmed || !matches!(cfg.kind, SourceKind::Custom) {
+        if cfg.confirmed {
             return None;
         }
-        let engine = cfg.engine.as_deref().unwrap_or(CUSTOM_FALLBACK_ENGINE);
-        Some(Self {
-            target_key: engine_api_key_name(engine),
-        })
+        inference_credential_key(cfg).map(|target_key| Self { target_key })
     }
 }
 
@@ -2624,9 +2677,7 @@ fn persist_confirmed_inference_config_at(
     let Some(api_key) = api_key else {
         return write_inference_config_at(cfg, path);
     };
-    let Some(target_key) = (matches!(cfg.kind, SourceKind::Custom))
-        .then(|| engine_api_key_name(cfg.engine.as_deref().unwrap_or(CUSTOM_FALLBACK_ENGINE)))
-    else {
+    let Some(target_key) = inference_credential_key(cfg) else {
         return write_inference_config_at(cfg, path);
     };
 
@@ -2670,7 +2721,7 @@ fn stage_pending_inference_config_at(
     store
         .set(PENDING_INFERENCE_API_KEY, "")
         .map_err(|err| format!("Could not clear a pending API key: {}", err))?;
-    if matches!(cfg.kind, SourceKind::Custom) {
+    if inference_credential_key(cfg).is_some() {
         if let Some(api_key) = api_key {
             store
                 .set(PENDING_INFERENCE_API_KEY, api_key)
@@ -3379,7 +3430,7 @@ pub fn run() {
             let health = MenuItemBuilder::with_id("health", "Health: starting...")
                 .enabled(false)
                 .build(app)?;
-            let quit = MenuItemBuilder::with_id("quit", "Quit OpenJarvis").build(app)?;
+            let quit = MenuItemBuilder::with_id("quit", "Quit Viernes").build(app)?;
 
             let menu = MenuBuilder::new(app)
                 .item(&show)
@@ -3391,7 +3442,7 @@ pub fn run() {
 
             let _tray = TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("OpenJarvis")
+                .tooltip("Viernes")
                 .menu(&menu)
                 .on_menu_event(move |app, event| match event.id().as_ref() {
                     "show" => {
@@ -3477,7 +3528,7 @@ pub fn run() {
             get_overlay_conversation,
         ])
         .build(tauri::generate_context!())
-        .expect("error while building OpenJarvis Desktop")
+        .expect("error while building Viernes")
         .run(move |_app, event| {
             if let tauri::RunEvent::ExitRequested { .. } = event {
                 let b = backend.clone();
@@ -3497,15 +3548,16 @@ mod tests {
     use super::{
         boot_plan, default_local_model, discard_pending_inference_setup_at,
         format_extension_import_failure, format_missing_rust_toolchain, format_port_unavailable,
-        format_uv_sync_failure, format_uv_sync_spawn_error, managed_cloud_key_names,
-        matching_installed_model, model_names_match, normalize_host,
+        format_uv_sync_failure, format_uv_sync_spawn_error, inference_credential_key,
+        managed_cloud_key_names, matching_installed_model, model_names_match, normalize_host,
         parse_configured_inference_config, parse_ollama_model_names,
         persist_confirmed_inference_config_at, preferred_installed_model,
         project_root_near_executable, reload_cloud_keys_for_owned_backend_at,
-        should_persist_resolved_model, spawn_owned_child, stage_pending_inference_config_at,
-        startup_installed_model, upsert_engine_host, uv_sync_stderr_tail, BackendManager,
-        InferenceConfig, InferenceCredentialStore, PendingInferenceRollback, SetupStatus,
-        SourceKind, DESKTOP_UV_SYNC_COMMAND, PENDING_INFERENCE_API_KEY,
+        should_persist_resolved_model, source_kind_name, spawn_owned_child,
+        stage_pending_inference_config_at, startup_installed_model, upsert_engine_host,
+        uv_sync_stderr_tail, BackendManager, InferenceConfig, InferenceCredentialStore,
+        PendingInferenceCredential, PendingInferenceRollback, SetupStatus, SourceKind,
+        CLAUDE_DEFAULT_MODEL, DESKTOP_UV_SYNC_COMMAND, PENDING_INFERENCE_API_KEY,
     };
     use std::collections::HashMap;
     use std::path::Path;
@@ -3885,6 +3937,42 @@ mod tests {
             "http://localhost:1234"
         );
         assert_eq!(normalize_host("http://host:8000"), "http://host:8000");
+    }
+
+    #[test]
+    fn boot_plan_claude_skips_ollama_and_uses_cloud_engine() {
+        let cfg = InferenceConfig {
+            kind: SourceKind::Claude,
+            ..Default::default()
+        };
+        let plan = boot_plan(&cfg, 16.0);
+        assert!(!plan.launch_ollama);
+        assert!(plan.model_to_pull.is_none());
+        assert!(plan.engine_host.is_none());
+        assert!(plan
+            .serve_args
+            .windows(2)
+            .any(|w| w == ["--engine", "cloud"]));
+        assert!(plan
+            .serve_args
+            .windows(2)
+            .any(|w| w == ["--model", CLAUDE_DEFAULT_MODEL]));
+    }
+
+    #[test]
+    fn claude_source_parses_and_stores_key_as_anthropic() {
+        let cfg =
+            parse_configured_inference_config(r#"{"kind":"claude","confirmed":false}"#).unwrap();
+        assert!(matches!(cfg.kind, SourceKind::Claude));
+        assert_eq!(
+            inference_credential_key(&cfg).as_deref(),
+            Some("ANTHROPIC_API_KEY")
+        );
+        assert_eq!(
+            PendingInferenceCredential::for_config(&cfg).map(|c| c.target_key),
+            Some("ANTHROPIC_API_KEY".to_string())
+        );
+        assert_eq!(source_kind_name(cfg.kind), "claude");
     }
 
     #[test]

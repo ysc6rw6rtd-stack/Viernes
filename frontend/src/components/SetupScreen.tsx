@@ -174,20 +174,28 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
             <Cpu size={32} />
           </div>
           <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>
-            OpenJarvis
+            Viernes
           </h1>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {!statusChecked
               ? 'Checking your saved setup...'
               : status?.source === 'custom'
                 ? 'Connecting to your AI server...'
+                : status?.source === 'claude'
+                  ? 'Connecting to Claude...'
                 : 'Setting up your local AI...'}
           </p>
         </div>
 
         {/* Steps */}
         <div className="flex flex-col gap-2 mb-8">
-          {(status?.source === 'custom'
+          {(status?.source === 'claude'
+            ? [
+                { key: 'ollama_ready' as const, label: 'Claude', icon: Cpu, detail: 'Preparing Claude...' },
+                { key: 'model_ready' as const, label: 'AI Model', icon: Database, detail: 'Checking model...' },
+                { key: 'server_ready' as const, label: 'API Server', icon: Server, detail: 'Starting server...' },
+              ]
+            : status?.source === 'custom'
             ? [
                 { key: 'ollama_ready' as const, label: 'Inference Engine', icon: Cpu, detail: 'Connecting to your server...' },
                 { key: 'model_ready' as const, label: 'Endpoint', icon: Database, detail: 'Checking endpoint...' },

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  ClaudeSetup,
   CustomEndpointSetup,
   InferenceRecoveryButton,
   InferenceSourceChooser,
@@ -52,6 +53,21 @@ describe('first-run inference source navigation', () => {
     expect(html).toMatch(/aria-label="Server URL"[^>]*required/);
     expect(html).toMatch(/aria-label="Model ID"[^>]*required/);
     expect(html).toContain('Ollama will not start or download models');
+    expect(html).toContain('Cancel');
+  });
+
+  it('lets Claude setup cancel safely back to the chooser', () => {
+    expect(inferenceSetupReducer('choose', 'choose_claude')).toBe('claude');
+    expect(inferenceSetupReducer('claude', 'back')).toBe('choose');
+  });
+
+  it('offers Claude as a source and requires an API key for it', () => {
+    const chooser = renderToStaticMarkup(<InferenceSourceChooser onChoose={vi.fn()} />);
+    expect(chooser).toContain('Claude (Anthropic)');
+
+    const html = renderToStaticMarkup(<ClaudeSetup onCancel={vi.fn()} onConfirm={vi.fn()} />);
+    expect(html).toMatch(/aria-label="Anthropic API key"[^>]*required/);
+    expect(html).toContain('claude-opus-5-5');
     expect(html).toContain('Cancel');
   });
 

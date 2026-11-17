@@ -1,5 +1,5 @@
 import { useReducer, useState, type FormEvent } from 'react';
-import { ArrowLeft, Cpu, Download, Loader2, Server, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Cpu, Download, Loader2, Server, ShieldCheck, Sparkles } from 'lucide-react';
 import {
   resetInferenceSource,
   stageInferenceSource,
@@ -7,8 +7,8 @@ import {
   type InferenceSource,
 } from '../lib/api';
 
-export type InferenceSetupStep = 'choose' | 'ollama' | 'custom';
-export type InferenceSetupAction = 'choose_ollama' | 'choose_custom' | 'back';
+export type InferenceSetupStep = 'choose' | 'ollama' | 'custom' | 'claude';
+export type InferenceSetupAction = 'choose_ollama' | 'choose_custom' | 'choose_claude' | 'back';
 export type InferenceSourceSubmission = InferenceSource & { apiKey?: string };
 
 /** Pure navigation state: merely inspecting a source can never start setup. */
@@ -21,6 +21,8 @@ export function inferenceSetupReducer(
       return 'ollama';
     case 'choose_custom':
       return 'custom';
+    case 'choose_claude':
+      return 'claude';
     case 'back':
       return 'choose';
     default:
@@ -83,11 +85,27 @@ function SetupFrame({ children }: { children: React.ReactNode }) {
 export function InferenceSourceChooser({
   onChoose,
 }: {
-  onChoose: (source: 'ollama' | 'custom') => void;
+  onChoose: (source: 'ollama' | 'custom' | 'claude') => void;
 }) {
   return (
     <SetupFrame>
       <div className="flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={() => onChoose('claude')}
+          className="flex items-start gap-4 p-4 rounded-xl text-left transition-all cursor-pointer"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        >
+          <Sparkles size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
+          <span>
+            <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
+              Claude (Anthropic)
+            </span>
+            <span className="block text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
+              Use Claude through the Anthropic API with your own API key. Nothing is downloaded and Ollama stays off.
+            </span>
+          </span>
+        </button>
         <button
           type="button"
           onClick={() => onChoose('ollama')}
@@ -185,7 +203,7 @@ export function OllamaConsent({
             Allow local model setup?
           </h2>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-            OpenJarvis will start Ollama and may download one model selected for this computer. Model downloads can use several gigabytes of disk space and network data.
+            Viernes will start Ollama and may download one model selected for this computer. Model downloads can use several gigabytes of disk space and network data.
           </p>
         </div>
       </div>
@@ -269,7 +287,7 @@ export function CustomEndpointSetup({
             Connect your server
           </h2>
           <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            OpenJarvis will connect only after you submit this form. Ollama will not start or download models.
+            Viernes will connect only after you submit this form. Ollama will not start or download models.
           </p>
         </div>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
@@ -340,6 +358,94 @@ export function CustomEndpointSetup({
   );
 }
 
+export const CLAUDE_MODELS = [
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (most capable)' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (balanced)' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (fastest, cheapest)' },
+] as const;
+
+export function ClaudeSetup({
+  onCancel,
+  onConfirm,
+  busy = false,
+  error = '',
+}: {
+  onCancel: () => void;
+  onConfirm: (source: InferenceSourceSubmission) => void;
+  busy?: boolean;
+  error?: string;
+}) {
+  const [model, setModel] = useState<string>(CLAUDE_MODELS[0].id);
+  const [apiKey, setApiKey] = useState('');
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    onConfirm({ kind: 'claude', model, apiKey: apiKey.trim() });
+  };
+
+  const fieldStyle = {
+    background: 'var(--color-surface)',
+    color: 'var(--color-text)',
+    border: '1px solid var(--color-border)',
+  };
+
+  return (
+    <SetupFrame>
+      <BackButton onClick={onCancel} label="Cancel" disabled={busy} />
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
+            Connect Claude
+          </h2>
+          <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
+            Create a key at console.anthropic.com. Usage is billed to your Anthropic account. The key is kept in this computer's secure storage.
+          </p>
+        </div>
+        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          Anthropic API key
+          <input
+            aria-label="Anthropic API key"
+            type="password"
+            required
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            placeholder="sk-ant-..."
+            autoComplete="off"
+            className="block w-full mt-1.5 px-3 py-2 rounded-lg text-sm outline-none"
+            style={fieldStyle}
+          />
+        </label>
+        <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+          Model
+          <select
+            aria-label="Claude model"
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            className="block w-full mt-1.5 px-3 py-2 rounded-lg text-sm outline-none"
+            style={fieldStyle}
+          >
+            {CLAUDE_MODELS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {error && <SetupError message={error} />}
+        <button
+          type="submit"
+          disabled={busy || !apiKey.trim()}
+          className="w-full py-3 px-4 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ background: 'var(--color-accent)', color: 'white' }}
+        >
+          {busy && <Loader2 size={16} className="animate-spin" />}
+          {busy ? 'Connecting...' : 'Save and connect'}
+        </button>
+      </form>
+    </SetupFrame>
+  );
+}
+
 export function InferenceSourceSetup({ onStarted }: { onStarted: () => void }) {
   const [step, dispatch] = useReducer(inferenceSetupReducer, 'choose');
   const [busy, setBusy] = useState(false);
@@ -377,9 +483,23 @@ export function InferenceSourceSetup({ onStarted }: { onStarted: () => void }) {
       />
     );
   }
+  if (step === 'claude') {
+    return (
+      <ClaudeSetup
+        busy={busy}
+        error={error}
+        onCancel={() => dispatch('back')}
+        onConfirm={(source) => void begin(source)}
+      />
+    );
+  }
   return (
     <InferenceSourceChooser
-      onChoose={(source) => dispatch(source === 'ollama' ? 'choose_ollama' : 'choose_custom')}
+      onChoose={(source) =>
+        dispatch(
+          source === 'ollama' ? 'choose_ollama' : source === 'claude' ? 'choose_claude' : 'choose_custom',
+        )
+      }
     />
   );
 }

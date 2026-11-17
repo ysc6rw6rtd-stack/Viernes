@@ -110,3 +110,47 @@ async def test_legacy_models_keep_requested_temperature(method, model):
 
     assert "temperature" not in sent
     assert sent["extra_body"]["temperature"] == 0.4
+
+
+@pytest.mark.parametrize(
+    ("model", "forced"),
+    [
+        ("claude-opus-5-5", False),
+        ("claude-sonnet-5-5", False),
+        ("claude-fable-5-2", False),
+        ("claude-opus-4-8", True),
+    ],
+)
+def test_structured_output_avoids_forced_tool_choice_where_rejected(model, forced):
+    from openjarvis.engine._stubs import ResponseFormat
+
+    response = SimpleNamespace(
+        content=[
+            SimpleNamespace(
+                type="tool_use", id="t1", name="json_output", input={"a": 1}
+            )
+        ],
+        usage=SimpleNamespace(input_tokens=2, output_tokens=1),
+        model=model,
+        stop_reason="tool_use",
+    )
+    client = MagicMock()
+    client.messages.create.return_value = response
+    engine = CloudEngine.__new__(CloudEngine)
+    engine._anthropic_client = client
+
+    engine._generate_anthropic(
+        [Message(role=Role.USER, content="Hi")],
+        model=model,
+        temperature=0.4,
+        max_tokens=32,
+        response_format=ResponseFormat(schema={"type": "object"}),
+    )
+    sent = client.messages.create.call_args.kwargs
+    if forced:
+        assert sent["tool_choice"] == {"type": "tool", "name": "json_output"}
+    else:
+        assert sent["tool_choice"] == {"type": "auto"}
+        json_tool = next(t for t in sent["tools"] if t["name"] == "json_output")
+        assert json_tool["strict"] is True
+        assert "json_output" in sent["system"]
