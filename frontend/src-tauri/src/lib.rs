@@ -128,7 +128,7 @@ const CUSTOM_FALLBACK_ENGINE: &str = "lmstudio";
 const APP_DIR_NAME: &str = "Viernes";
 
 /// Git repository the desktop app clones its backend from on first launch.
-const BACKEND_REPO_URL: &str = "https://github.com/VIERNES_OWNER/Viernes.git";
+const BACKEND_REPO_URL: &str = "https://github.com/ysc6rw6rtd-stack/Viernes.git";
 
 /// Default Claude model when the user picks Anthropic's API as the source.
 const CLAUDE_DEFAULT_MODEL: &str = "claude-opus-5-5";

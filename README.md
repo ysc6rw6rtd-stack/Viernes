@@ -1,3 +1,11 @@
+# Viernes
+
+Viernes es un asistente personal de IA basado en [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) (licencia Apache-2.0), modificado para llamarse Viernes y poder usar Claude a través de la API de Anthropic.
+
+**Instalar en Windows:** descarga el archivo `Viernes_..._x64-setup.exe` de la sección [Releases](https://github.com/ysc6rw6rtd-stack/Viernes/releases/latest) y ábrelo.
+
+---
+
 <div align="center">
   <img alt="OpenJarvis" src="assets/OpenJarvis_Horizontal_Logo.png" width="400">
 
