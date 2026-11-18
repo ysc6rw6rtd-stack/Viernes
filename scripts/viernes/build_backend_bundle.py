@@ -20,6 +20,7 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -159,6 +160,11 @@ def main(argv: list[str]) -> int:
         raise SystemExit("pyproject.toml no longer has the expected requires-python")
     text = text.replace(REQUIRES_PYTHON, f'requires-python = "=={python_version}.*"')
     text = prune_extras(text)
+    # Report the Viernes release as the backend version (no .git in the bundle).
+    viernes_version = os.environ.get("VIERNES_VERSION", "")
+    fallback = 'fallback_version = "0.0.0+unknown"'
+    if viernes_version and fallback in text:
+        text = text.replace(fallback, f'fallback_version = "{viernes_version}"')
     text += f'\n[tool.uv]\nenvironments = ["{platform_marker(wheel.name)}"]\n'
     pyproject.write_text(text, encoding="utf-8")
 

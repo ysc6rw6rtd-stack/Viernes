@@ -251,6 +251,16 @@ fn backend_needs_rust_toolchain(root: &std::path::Path) -> bool {
     !root.join(PREBUILT_BACKEND_MARKER).is_file()
 }
 
+/// Folder (under the user's home) where Viernes keeps its settings and data,
+/// separate from an OpenJarvis install's `~/.openjarvis`.
+const APP_DATA_DIR_NAME: &str = ".viernes";
+
+/// Viernes' settings/data folder. The Python backend is pointed here through
+/// `OPENJARVIS_HOME` (see `run`), so both halves of the app agree on it.
+fn app_data_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from(home_dir()).join(APP_DATA_DIR_NAME)
+}
+
 /// Get the user home directory, handling both Unix (HOME) and Windows (USERPROFILE).
 fn home_dir() -> String {
     std::env::var("HOME")
@@ -582,7 +592,7 @@ impl Default for SetupStatus {
     fn default() -> Self {
         Self {
             phase: "awaiting_source".into(),
-            detail: "Choose where Viernes should run models.".into(),
+            detail: "Elige el cerebro de Viernes.".into(),
             ollama_ready: false,
             server_ready: false,
             model_ready: false,
@@ -597,7 +607,7 @@ impl SetupStatus {
     fn starting(cfg: &InferenceConfig) -> Self {
         Self {
             phase: "starting".into(),
-            detail: "Initializing...".into(),
+            detail: "Iniciando...".into(),
             source: source_kind_name(cfg.kind).into(),
             requires_source: false,
             ..Self::default()
@@ -1150,7 +1160,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         {
             let mut s = status.lock().await;
             s.phase = "ollama".into();
-            s.detail = "Starting inference engine...".into();
+            s.detail = "Iniciando el motor de IA...".into();
         }
 
         // Try the bundled sidecar first, fall back to system ollama
@@ -1184,7 +1194,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         {
             let mut s = status.lock().await;
             s.ollama_ready = true;
-            s.detail = "Inference engine ready.".into();
+            s.detail = "Motor de IA listo.".into();
         }
 
         // Phase 2: Resolve one model to serve. Prefer an installed model on
@@ -1196,7 +1206,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         {
             let mut s = status.lock().await;
             s.phase = "model".into();
-            s.detail = format!("Checking for {}...", model);
+            s.detail = format!("Buscando {}...", model);
         }
 
         let installed_models = ollama_model_names().await;
@@ -1207,7 +1217,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         } else {
             {
                 let mut s = status.lock().await;
-                s.detail = format!("Downloading {}... (this may take a minute)", model);
+                s.detail = format!("Descargando {}... (puede tardar unos minutos)", model);
             }
             match pull_model(&model).await {
                 Ok(()) => model.clone(),
@@ -1224,7 +1234,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
                     } else {
                         {
                             let mut s = status.lock().await;
-                            s.detail = format!("Downloading {}...", FALLBACK_MODEL);
+                            s.detail = format!("Descargando {}...", FALLBACK_MODEL);
                         }
                         if let Err(e2) = pull_model(FALLBACK_MODEL).await {
                             if let Some(installed) =
@@ -1246,7 +1256,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
 
         if resolved_model != model {
             let mut s = status.lock().await;
-            s.detail = format!("Using installed model {}.", resolved_model);
+            s.detail = format!("Usando el modelo instalado {}.", resolved_model);
         }
 
         serve_model_override = Some(resolved_model.clone());
@@ -1265,7 +1275,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         {
             let mut s = status.lock().await;
             s.model_ready = true;
-            s.detail = "Model ready.".into();
+            s.detail = "Modelo listo.".into();
         }
     } else if matches!(cfg.kind, SourceKind::Claude) {
         // Claude via the Anthropic API: nothing to start or download. The key
@@ -1273,7 +1283,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         let mut s = status.lock().await;
         s.ollama_ready = true;
         s.model_ready = true;
-        s.detail = "Using Claude via the Anthropic API.".into();
+        s.detail = "Usando Claude a través de la API de Anthropic.".into();
     } else {
         // Custom OpenAI-compatible endpoint: never start Ollama, never download.
         let host = plan
@@ -1284,7 +1294,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         {
             let mut s = status.lock().await;
             s.phase = "model".into();
-            s.detail = format!("Connecting to {}...", host);
+            s.detail = format!("Conectando con {}...", host);
         }
         if host.is_empty() || !endpoint_reachable(&host, Duration::from_secs(15)).await {
             let mut s = status.lock().await;
@@ -1313,7 +1323,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
             let mut s = status.lock().await;
             s.ollama_ready = true;
             s.model_ready = true;
-            s.detail = "Connected to custom endpoint.".into();
+            s.detail = "Conectado a tu servidor.".into();
         }
     }
 
@@ -1321,7 +1331,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
     {
         let mut s = status.lock().await;
         s.phase = "server".into();
-        s.detail = "Starting API server...".into();
+        s.detail = "Iniciando el servidor de Viernes...".into();
     }
 
     let uv_bin = resolve_bin("uv");
@@ -1389,7 +1399,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
 
         {
             let mut s = status.lock().await;
-            s.detail = "Downloading Viernes (first launch)...".into();
+            s.detail = "Descargando Viernes (primer arranque)...".into();
         }
 
         let mut clone_cmd = tokio::process::Command::new(&git_bin);
@@ -1598,7 +1608,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
     // boot so users don't restart the app thinking it's stuck.
     {
         let mut s = status.lock().await;
-        s.detail = "Installing dependencies (uv sync — may take 1-2 min on first boot)...".into();
+        s.detail = "Instalando componentes (la primera vez puede tardar varios minutos)...".into();
     }
     let mut sync_cmd = tokio::process::Command::new(&uv_bin);
     sync_cmd
@@ -1641,7 +1651,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
 
     {
         let mut s = status.lock().await;
-        s.detail = "Verifying Rust extension (openjarvis_rust)...".into();
+        s.detail = "Comprobando la memoria de Viernes...".into();
     }
     if let Err(err) = verify_openjarvis_rust_extension(root, &uv_bin).await {
         let mut s = status.lock().await;
@@ -1651,7 +1661,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
 
     {
         let mut s = status.lock().await;
-        s.detail = format!("Starting API server from {}...", root.display());
+        s.detail = "Arrancando Viernes (la primera vez puede tardar unos minutos)...".into();
     }
 
     let mut cmd = tokio::process::Command::new(&uv_bin);
@@ -1802,7 +1812,7 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
         let mut s = status.lock().await;
         s.server_ready = true;
         s.phase = "ready".into();
-        s.detail = "All systems ready.".into();
+        s.detail = "Todo listo.".into();
     }
 
     // Phase 4: done. We intentionally do NOT auto-pull the rest of the
@@ -2234,7 +2244,7 @@ async fn submit_savings(
 // Cloud API key management
 // ---------------------------------------------------------------------------
 
-const SECURE_KEY_SERVICE: &str = "OpenJarvis Cloud Keys";
+const SECURE_KEY_SERVICE: &str = "Viernes Cloud Keys";
 // A first-run custom credential is kept in its own secure-storage slot until
 // the managed backend has passed every readiness gate.  In particular, do not
 // overwrite an existing <ENGINE>_API_KEY while setup can still be cancelled.
@@ -2252,10 +2262,7 @@ const MANAGED_CLOUD_KEY_NAMES: &[&str] = &[
 
 /// Legacy path used by older desktop builds. New saves never write here.
 fn legacy_cloud_keys_path() -> std::path::PathBuf {
-    let home = home_dir();
-    std::path::PathBuf::from(home)
-        .join(".openjarvis")
-        .join("cloud-keys.env")
+    app_data_dir().join("cloud-keys.env")
 }
 
 fn validate_cloud_key_name(key_name: &str) -> Result<(), String> {
@@ -2662,9 +2669,7 @@ fn legacy_config_is_confirmed() -> bool {
 
 /// Path to the inference-source config (~/.openjarvis/inference.json).
 fn inference_config_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(home_dir())
-        .join(".openjarvis")
-        .join("inference.json")
+    app_data_dir().join("inference.json")
 }
 
 fn remove_inference_config_at(path: &std::path::Path) -> Result<(), String> {
@@ -2986,9 +2991,7 @@ fn upsert_engine_host(existing: &str, engine: &str, host: &str) -> Result<String
 /// The `<ENGINE>_HOST` env var is unreliable — it is shadowed by the engine's
 /// non-empty default host in the Python layer — so config.toml is the override.
 fn set_engine_host_in_config(engine: &str, host: &str) -> Result<(), String> {
-    let path = std::path::PathBuf::from(home_dir())
-        .join(".openjarvis")
-        .join("config.toml");
+    let path = app_data_dir().join("config.toml");
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -3075,9 +3078,7 @@ mod native_overlay {
     // ------------------------------------------------------------------
 
     fn conversation_path() -> std::path::PathBuf {
-        std::path::PathBuf::from(super::home_dir())
-            .join(".openjarvis")
-            .join("overlay-conversation.json")
+        super::app_data_dir().join("overlay-conversation.json")
     }
 
     pub fn load_conversation() -> String {
@@ -3415,6 +3416,11 @@ async fn hide_overlay() -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Keep Viernes' settings and data apart from an OpenJarvis install. Set
+    // before any thread starts so every backend child process inherits it.
+    if std::env::var_os("OPENJARVIS_HOME").is_none() {
+        std::env::set_var("OPENJARVIS_HOME", app_data_dir());
+    }
     let backend: SharedBackend = Arc::new(Mutex::new(BackendManager::default()));
     let configured_at_launch = match read_configured_inference_config() {
         Some(cfg) if cfg.confirmed => {

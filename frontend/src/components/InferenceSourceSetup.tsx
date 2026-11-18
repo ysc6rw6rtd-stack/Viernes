@@ -65,10 +65,10 @@ function SetupFrame({ children }: { children: React.ReactNode }) {
             <Cpu size={32} />
           </div>
           <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--color-text)' }}>
-            Choose your inference source
+            Elige el cerebro de Viernes
           </h1>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
-            Nothing is installed, started, or downloaded until you confirm a choice.
+            No se instala, inicia ni descarga nada hasta que confirmes tu elección.
           </p>
         </div>
         <div
@@ -102,7 +102,7 @@ export function InferenceSourceChooser({
               Claude (Anthropic)
             </span>
             <span className="block text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Use Claude through the Anthropic API with your own API key. Nothing is downloaded and Ollama stays off.
+              Usa Claude con tu propia clave de la API de Anthropic. No se descarga nada y Ollama queda apagado.
             </span>
           </span>
         </button>
@@ -115,10 +115,10 @@ export function InferenceSourceChooser({
           <Cpu size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
           <span>
             <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              Local Ollama
+              Ollama local (gratis)
             </span>
             <span className="block text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Run models on this computer. Requires a separate confirmation before Ollama starts or a model downloads.
+              Ejecuta modelos en este ordenador. Pide confirmación antes de iniciar Ollama o descargar un modelo.
             </span>
           </span>
         </button>
@@ -131,10 +131,10 @@ export function InferenceSourceChooser({
           <Server size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
           <span>
             <span className="block text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-              OpenAI-compatible server
+              Servidor compatible con OpenAI
             </span>
             <span className="block text-xs mt-1" style={{ color: 'var(--color-text-secondary)' }}>
-              Connect to LM Studio, vLLM, SGLang, llama.cpp, MLX, or another compatible endpoint. Ollama stays off.
+              Conecta con LM Studio, vLLM, SGLang, llama.cpp, MLX u otro servidor compatible. Ollama queda apagado.
             </span>
           </span>
         </button>
@@ -143,7 +143,7 @@ export function InferenceSourceChooser({
   );
 }
 
-function BackButton({ onClick, label = 'Back', disabled = false }: { onClick: () => void; label?: string; disabled?: boolean }) {
+function BackButton({ onClick, label = 'Atrás', disabled = false }: { onClick: () => void; label?: string; disabled?: boolean }) {
   return (
     <button
       type="button"
@@ -177,7 +177,7 @@ export function InferenceRecoveryButton({
         background: 'var(--color-surface)',
       }}
     >
-      {recovering ? 'Stopping setup...' : 'Change inference source'}
+      {recovering ? 'Deteniendo...' : 'Cambiar el cerebro de Viernes'}
     </button>
   );
 }
@@ -200,10 +200,10 @@ export function OllamaConsent({
         <Download size={22} className="shrink-0 mt-0.5" style={{ color: 'var(--color-accent)' }} />
         <div>
           <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
-            Allow local model setup?
+            ¿Permitir preparar el modelo local?
           </h2>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-secondary)' }}>
-            Viernes will start Ollama and may download one model selected for this computer. Model downloads can use several gigabytes of disk space and network data.
+            Viernes iniciará Ollama y puede descargar un modelo elegido para este ordenador. La descarga puede ocupar varios gigabytes de disco y de datos.
           </p>
         </div>
       </div>
@@ -212,7 +212,7 @@ export function OllamaConsent({
         style={{ background: 'var(--color-accent-subtle)', color: 'var(--color-text-secondary)' }}
       >
         <ShieldCheck size={16} className="shrink-0" style={{ color: 'var(--color-accent)' }} />
-        Going back leaves Ollama stopped and does not save this choice.
+        Si vuelves atrás, Ollama sigue apagado y no se guarda esta elección.
       </div>
       {error && <SetupError message={error} />}
       <button
@@ -223,7 +223,7 @@ export function OllamaConsent({
         style={{ background: 'var(--color-accent)', color: 'white' }}
       >
         {busy && <Loader2 size={16} className="animate-spin" />}
-        {busy ? 'Starting local setup...' : 'Use Ollama and continue'}
+        {busy ? 'Preparando...' : 'Usar Ollama y continuar'}
       </button>
     </SetupFrame>
   );
@@ -280,18 +280,18 @@ export function CustomEndpointSetup({
 
   return (
     <SetupFrame>
-      <BackButton onClick={onCancel} label="Cancel" disabled={busy} />
+      <BackButton onClick={onCancel} label="Cancelar" disabled={busy} />
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div>
           <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
-            Connect your server
+            Conecta tu servidor
           </h2>
           <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Viernes will connect only after you submit this form. Ollama will not start or download models.
+            Viernes solo se conectará cuando envíes este formulario. Ollama no se iniciará ni descargará modelos.
           </p>
         </div>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          Server URL
+          Dirección del servidor
           <input
             aria-label="Server URL"
             type="url"
@@ -303,7 +303,7 @@ export function CustomEndpointSetup({
           />
         </label>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          Model ID
+          ID del modelo
           <input
             aria-label="Model ID"
             type="text"
@@ -316,7 +316,7 @@ export function CustomEndpointSetup({
           />
         </label>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          Server type
+          Tipo de servidor
           <select
             aria-label="Server type"
             value={engine}
@@ -332,7 +332,7 @@ export function CustomEndpointSetup({
           </select>
         </label>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          API key (optional)
+          Clave de API (opcional)
           <input
             aria-label="API key"
             type="password"
@@ -351,7 +351,7 @@ export function CustomEndpointSetup({
           style={{ background: 'var(--color-accent)', color: 'white' }}
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
-          {busy ? 'Connecting...' : 'Save and connect'}
+          {busy ? 'Conectando...' : 'Guardar y conectar'}
         </button>
       </form>
     </SetupFrame>
@@ -359,9 +359,9 @@ export function CustomEndpointSetup({
 }
 
 export const CLAUDE_MODELS = [
-  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (most capable)' },
-  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (balanced)' },
-  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (fastest, cheapest)' },
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (el más listo)' },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (equilibrado)' },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 (rápido y barato)' },
 ] as const;
 
 export function ClaudeSetup({
@@ -391,18 +391,18 @@ export function ClaudeSetup({
 
   return (
     <SetupFrame>
-      <BackButton onClick={onCancel} label="Cancel" disabled={busy} />
+      <BackButton onClick={onCancel} label="Cancelar" disabled={busy} />
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div>
           <h2 className="text-base font-semibold mb-1" style={{ color: 'var(--color-text)' }}>
-            Connect Claude
+            Conectar Claude
           </h2>
           <p className="text-xs" style={{ color: 'var(--color-text-secondary)' }}>
-            Create a key at console.anthropic.com. Usage is billed to your Anthropic account. The key is kept in this computer's secure storage.
+            Crea una clave en platform.claude.com (Claves de API). El uso se cobra en tu cuenta de Anthropic. La clave se guarda de forma segura en este ordenador.
           </p>
         </div>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          Anthropic API key
+          Clave de API de Anthropic
           <input
             aria-label="Anthropic API key"
             type="password"
@@ -416,7 +416,7 @@ export function ClaudeSetup({
           />
         </label>
         <label className="text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
-          Model
+          Modelo
           <select
             aria-label="Claude model"
             value={model}
@@ -439,7 +439,7 @@ export function ClaudeSetup({
           style={{ background: 'var(--color-accent)', color: 'white' }}
         >
           {busy && <Loader2 size={16} className="animate-spin" />}
-          {busy ? 'Connecting...' : 'Save and connect'}
+          {busy ? 'Conectando...' : 'Guardar y conectar'}
         </button>
       </form>
     </SetupFrame>

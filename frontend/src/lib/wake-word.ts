@@ -14,12 +14,15 @@ export const WAKE_WORDS = ['viernes', 'biernes'] as const;
 export function normalizeTranscript(text: string): string {
   return text
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
+
+/** Words people say before the name: "Oye Viernes", "Hey Viernes"... */
+export const WAKE_PREFIXES = ['oye', 'oiga', 'hey', 'ey', 'ok', 'okay', 'hola', 'eh'] as const;
 
 export interface WakeMatch {
   /** The wake word was spoken. */
@@ -29,23 +32,32 @@ export interface WakeMatch {
 }
 
 /**
- * Find the wake word in a transcript and return the request that follows it,
- * keeping the user's original wording (accents, punctuation) for the command.
+ * Detect the wake word at the start of a transcript ("Viernes, ..." or
+ * "Oye Viernes, ...") and return the request that follows it, keeping the
+ * user's original wording. The name in the middle of a sentence ("el viernes
+ * que viene") does not count, so ordinary talk does not wake Viernes up.
  */
 export function parseWakeCommand(text: string): WakeMatch {
   const words = text.trim().split(/\s+/).filter(Boolean);
-  for (let i = 0; i < words.length; i++) {
-    const word = normalizeTranscript(words[i]);
-    if ((WAKE_WORDS as readonly string[]).includes(word)) {
-      const command = words
-        .slice(i + 1)
-        .join(' ')
-        .replace(/^[\s,.:;!?-]+/, '')
-        .trim();
-      return { heard: true, command };
-    }
+  const normalized = words.map((w) => normalizeTranscript(w));
+  const isWake = (i: number) => (WAKE_WORDS as readonly string[]).includes(normalized[i] ?? '');
+  const isPrefix = (i: number) => (WAKE_PREFIXES as readonly string[]).includes(normalized[i] ?? '');
+
+  // Skip empty tokens left by punctuation-only words ("¡", "...").
+  let i = 0;
+  while (i < words.length && normalized[i] === '') i++;
+  if (isPrefix(i)) {
+    i++;
+    while (i < words.length && normalized[i] === '') i++;
   }
-  return { heard: false, command: '' };
+  if (!isWake(i)) return { heard: false, command: '' };
+
+  const command = words
+    .slice(i + 1)
+    .join(' ')
+    .replace(/^[\s,.:;!?-]+/, '')
+    .trim();
+  return { heard: true, command };
 }
 
 /** Root-mean-square level of one block of samples (0..1). */

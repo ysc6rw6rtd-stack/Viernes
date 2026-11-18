@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { checkForViernesUpdate, openExternal } from '../../lib/viernes-updates';
 
 type UpdateState = 'idle' | 'available' | 'downloading' | 'ready' | 'error';
 
@@ -34,8 +35,7 @@ export function UpdateChecker() {
   const checkForUpdate = useCallback(async () => {
     if (isAutoUpdateDisabled()) return;
     try {
-      const { check } = await import('@tauri-apps/plugin-updater');
-      const update = await check();
+      const update = await checkForViernesUpdate();
       if (update) {
         updateRef.current = update;
         setVersion(update.version);
@@ -71,6 +71,13 @@ export function UpdateChecker() {
   const handleDownload = useCallback(async () => {
     const update = updateRef.current;
     if (!update) return;
+    // Viernes releases are installed by running the new installer, which
+    // the browser downloads; there is no signed in-place update.
+    if (typeof update.installerUrl === 'string') {
+      await openExternal(update.installerUrl);
+      setDismissed(true);
+      return;
+    }
 
     setState('downloading');
     setProgress(0);
@@ -121,11 +128,11 @@ export function UpdateChecker() {
     <div style={styles.banner}>
       {state === 'available' && (
         <div style={styles.row}>
-          <span>Update available: <strong>v{version}</strong></span>
+          <span>Hay una versión nueva de Viernes: <strong>v{version}</strong>. Descárgala, cierra Viernes e instálala.</span>
           <div style={styles.actions}>
-            <button style={styles.primaryBtn} onClick={handleDownload}>Download</button>
-            <button style={styles.secondaryBtn} onClick={() => setDismissed(true)}>Later</button>
-            <button style={styles.muteBtn} onClick={handleDisable}>Disable auto-updates</button>
+            <button style={styles.primaryBtn} onClick={handleDownload}>Descargar</button>
+            <button style={styles.secondaryBtn} onClick={() => setDismissed(true)}>Más tarde</button>
+            <button style={styles.muteBtn} onClick={handleDisable}>No avisar</button>
           </div>
         </div>
       )}

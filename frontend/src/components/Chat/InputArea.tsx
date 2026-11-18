@@ -14,6 +14,7 @@ import { MicButton } from './MicButton';
 import { useSpeech } from '../../hooks/useSpeech';
 import { useHandsFree, type HandsFreeState } from '../../hooks/useHandsFree';
 import { useTtsStore } from '../../lib/tts';
+import { friendlyChatError } from '../../lib/claude-cost';
 import type {
   ChatMessage,
   MessageTelemetry,
@@ -197,7 +198,7 @@ export function InputArea() {
     const content = (spoken ?? input).trim();
     if (!content || streamState.isStreaming) return;
     if (!selectedModel) {
-      toast.error('Pick a model first (⌘K)');
+      toast.error('Elige primero un modelo (Ctrl+K)');
       return;
     }
 
@@ -257,7 +258,7 @@ export function InputArea() {
     setStreamState({
       conversationId: convId,
       isStreaming: true,
-      phase: deepResearch ? 'Researching...' : 'Generating...',
+      phase: deepResearch ? 'Investigando...' : 'Pensando...',
       elapsedMs: 0,
       activeToolCalls: [],
       content: '',
@@ -482,7 +483,7 @@ export function InputArea() {
       } else {
         const errMsg = err?.message || String(err);
         accumulatedContent =
-          accumulatedContent || `Error: ${errMsg}`;
+          accumulatedContent || `⚠️ ${friendlyChatError(errMsg, selectedModel)}`;
         useAppStore.getState().addLogEntry({
           timestamp: Date.now(), level: 'error', category: 'chat',
           message: `Stream error: ${errMsg}`,
@@ -492,8 +493,13 @@ export function InputArea() {
       // numbers don't get stuck on the last sample.
       useAppStore.getState().setLiveEnergy(null);
     } finally {
+      // The server reports engine failures as a normal reply; explain them.
+      const serverError = accumulatedContent.match(/^Sorry, an error occurred: ([\s\S]*)$/);
+      if (serverError) {
+        accumulatedContent = `⚠️ ${friendlyChatError(serverError[1], selectedModel)}`;
+      }
       if (!accumulatedContent) {
-        accumulatedContent = 'No response was generated. Please try again.';
+        accumulatedContent = 'No se generó ninguna respuesta. Inténtalo de nuevo.';
       }
       const totalMs = Date.now() - startTime;
       const appState = useAppStore.getState();
@@ -680,7 +686,7 @@ export function InputArea() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={selectedModel ? 'Message Viernes...' : 'Pick a model first (⌘K)...'}
+          placeholder={selectedModel ? 'Escribe a Viernes...' : 'Elige primero un modelo (Ctrl+K)...'}
           rows={1}
           className="flex-1 bg-transparent outline-none resize-none text-sm leading-relaxed"
           style={{ color: 'var(--color-text)', maxHeight: '200px' }}
@@ -691,7 +697,7 @@ export function InputArea() {
             onClick={stopStreaming}
             className="p-2 rounded-xl transition-colors shrink-0 cursor-pointer"
             style={{ background: 'var(--color-error)', color: 'var(--color-on-accent)' }}
-            title="Stop generating"
+            title="Detener respuesta"
           >
             <Square size={16} />
           </button>
@@ -706,7 +712,7 @@ export function InputArea() {
             <button
               onClick={() => void sendMessage()}
               disabled={streamState.isStreaming || !input.trim() || modelLoading || !selectedModel}
-              title={selectedModel ? 'Send message' : 'Pick a model first (⌘K)'}
+              title={selectedModel ? 'Enviar mensaje' : 'Elige primero un modelo (Ctrl+K)'}
               className="p-2 rounded-xl transition-colors shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-default"
               style={{
                 background: input.trim() ? 'var(--color-accent)' : 'var(--color-bg-tertiary)',
@@ -720,8 +726,8 @@ export function InputArea() {
       </div>
       <div className="flex items-center justify-center mt-2 text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
         <span>
-          <kbd className="font-mono">Enter</kbd> to send &middot;{' '}
-          <kbd className="font-mono">Shift+Enter</kbd> for new line
+          <kbd className="font-mono">Enter</kbd> para enviar &middot;{' '}
+          <kbd className="font-mono">Shift+Enter</kbd> nueva línea
         </span>
       </div>
     </div>

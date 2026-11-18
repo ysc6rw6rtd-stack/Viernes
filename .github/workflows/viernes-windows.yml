@@ -47,6 +47,10 @@ jobs:
           cd frontend/src-tauri/scripts && chmod +x download-ollama.sh
           ./download-ollama.sh x86_64-pc-windows-msvc
 
+      - name: Set Viernes version
+        shell: bash
+        run: echo "VIERNES_VERSION=1.0.${{ github.run_number }}" >> "$GITHUB_ENV"
+
       # Everything below makes the installer self-contained: users need no
       # Git, Rust, Visual Studio Build Tools or a separate uv install.
       - name: Install uv
@@ -83,8 +87,7 @@ jobs:
       - name: Write release config
         shell: bash
         run: |
-          VERSION="1.0.${{ github.run_number }}"
-          echo "VIERNES_VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION="$VIERNES_VERSION"
           cat > frontend/src-tauri/tauri.release.conf.json <<JSON
           {
             "version": "$VERSION",

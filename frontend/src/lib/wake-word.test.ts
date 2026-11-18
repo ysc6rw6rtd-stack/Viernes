@@ -30,9 +30,18 @@ describe('wake word', () => {
     expect(parseWakeCommand('Viernes.')).toEqual({ heard: true, command: '' });
   });
 
-  it('ignores speech without the wake word', () => {
-    expect(parseWakeCommand('el viernes que viene vamos al cine').heard).toBe(true);
+  it('ignores speech without the wake word at the start', () => {
+    expect(parseWakeCommand('el viernes que viene vamos al cine').heard).toBe(false);
     expect(parseWakeCommand('hola qué tal').heard).toBe(false);
+    expect(parseWakeCommand('').heard).toBe(false);
+  });
+
+  it('accepts a greeting before the name', () => {
+    expect(parseWakeCommand('¡Oye, Viernes! abre el correo')).toEqual({
+      heard: true,
+      command: 'abre el correo',
+    });
+    expect(parseWakeCommand('Hey Viernes').command).toBe('');
   });
 });
 

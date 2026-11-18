@@ -4,17 +4,19 @@ import {
   getSetupStatus,
   fetchModels,
   fetchRecommendedModel,
+  getInferenceSource,
   resetInferenceSource,
   type SetupStatus,
 } from '../lib/api';
 import { useAppStore } from '../lib/store';
 import { isEmbedOnlyModel } from '../lib/model-capabilities';
+import { pickStartupModel } from '../lib/startup-model';
 import { InferenceRecoveryButton, InferenceSourceSetup } from './InferenceSourceSetup';
 
 const STEPS = [
-  { key: 'ollama_ready', label: 'Inference Engine', icon: Cpu, detail: 'Starting Ollama...' },
-  { key: 'model_ready', label: 'AI Model', icon: Database, detail: 'Loading model...' },
-  { key: 'server_ready', label: 'API Server', icon: Server, detail: 'Starting server...' },
+  { key: 'ollama_ready', label: 'Motor de IA', icon: Cpu, detail: 'Iniciando Ollama...' },
+  { key: 'model_ready', label: 'Modelo de IA', icon: Database, detail: 'Cargando modelo...' },
+  { key: 'server_ready', label: 'Servidor de Viernes', icon: Server, detail: 'Iniciando servidor...' },
 ] as const;
 
 type StepKey = (typeof STEPS)[number]['key'];
@@ -58,7 +60,7 @@ function StepRow({
           {label}
         </div>
         <div className="text-xs truncate" style={{ color: 'var(--color-text-tertiary)', maxWidth: '280px' }}>
-          {done ? 'Ready' : active ? detail : 'Waiting...'}
+          {done ? 'Listo' : active ? detail : 'En espera...'}
         </div>
       </div>
       <div className="shrink-0">
@@ -99,16 +101,24 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
           fetchRecommendedModel().catch(() => ({ model: '', reason: '' })),
         ]);
         const store = useAppStore.getState();
-        const hadSelection = !!store.selectedModel;
+        const previous = store.selectedModel;
         store.setModels(models);
         store.setModelsLoading(false);
         const chatModels = models.filter((m) => !isEmbedOnlyModel(m.id));
         const recommended = rec.model && chatModels.some((m) => m.id === rec.model)
           ? rec.model
           : chatModels[0]?.id || '';
-        if (recommended && !hadSelection) {
-          store.setSelectedModel(recommended);
-        }
+        const source = s.source === 'claude'
+          ? await getInferenceSource().catch(() => null)
+          : null;
+        const startup = pickStartupModel({
+          source: s.source,
+          configuredModel: source?.model,
+          recommended,
+          current: previous,
+          available: chatModels.map((m) => m.id),
+        });
+        if (startup) store.setSelectedModel(startup);
       } catch {
         // Non-fatal: store.setModels auto-selects on later fetch, and
         // the InputArea guards the empty-model case with a toast.
@@ -178,12 +188,12 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
           </h1>
           <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>
             {!statusChecked
-              ? 'Checking your saved setup...'
+              ? 'Comprobando tu configuración...'
               : status?.source === 'custom'
-                ? 'Connecting to your AI server...'
+                ? 'Conectando con tu servidor de IA...'
                 : status?.source === 'claude'
-                  ? 'Connecting to Claude...'
-                : 'Setting up your local AI...'}
+                  ? 'Conectando con Claude...'
+                : 'Preparando tu IA local...'}
           </p>
         </div>
 
@@ -191,15 +201,15 @@ export function SetupScreen({ onReady }: { onReady: () => void }) {
         <div className="flex flex-col gap-2 mb-8">
           {(status?.source === 'claude'
             ? [
-                { key: 'ollama_ready' as const, label: 'Claude', icon: Cpu, detail: 'Preparing Claude...' },
-                { key: 'model_ready' as const, label: 'AI Model', icon: Database, detail: 'Checking model...' },
-                { key: 'server_ready' as const, label: 'API Server', icon: Server, detail: 'Starting server...' },
+                { key: 'ollama_ready' as const, label: 'Claude', icon: Cpu, detail: 'Preparando Claude...' },
+                { key: 'model_ready' as const, label: 'Modelo de IA', icon: Database, detail: 'Comprobando modelo...' },
+                { key: 'server_ready' as const, label: 'Servidor de Viernes', icon: Server, detail: 'Iniciando servidor...' },
               ]
             : status?.source === 'custom'
             ? [
-                { key: 'ollama_ready' as const, label: 'Inference Engine', icon: Cpu, detail: 'Connecting to your server...' },
-                { key: 'model_ready' as const, label: 'Endpoint', icon: Database, detail: 'Checking endpoint...' },
-                { key: 'server_ready' as const, label: 'API Server', icon: Server, detail: 'Starting server...' },
+                { key: 'ollama_ready' as const, label: 'Motor de IA', icon: Cpu, detail: 'Conectando con tu servidor...' },
+                { key: 'model_ready' as const, label: 'Servidor', icon: Database, detail: 'Comprobando servidor...' },
+                { key: 'server_ready' as const, label: 'Servidor de Viernes', icon: Server, detail: 'Iniciando servidor...' },
               ]
             : STEPS
           ).map((step) => (
