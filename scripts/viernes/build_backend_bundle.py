@@ -19,6 +19,7 @@ Usage::
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -26,6 +27,8 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
+
+import tomllib
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -63,14 +66,60 @@ def platform_marker(wheel_name: str) -> str:
 
 MARKER = ".viernes-prebuilt"
 
+# Extras the desktop app installs (see DESKTOP_UV_SYNC_COMMAND in the Tauri
+# app). Every other extra is dropped from the bundle: several (vLLM, MLX,
+# training stacks) cannot resolve on Windows and would block `uv lock`.
+DESKTOP_EXTRAS = ("desktop", "inference-cloud", "inference-google")
+
+
+def required_extras(extras: dict[str, list[str]], roots: tuple[str, ...]) -> list[str]:
+    """Return ``roots`` plus every extra they pull in via ``openjarvis[...]``."""
+    needed: list[str] = []
+    stack = list(roots)
+    while stack:
+        name = stack.pop()
+        if name in needed:
+            continue
+        needed.append(name)
+        for req in extras[name]:
+            match = re.match(r"\s*openjarvis\[([^\]]+)\]", req)
+            if match:
+                stack.extend(e.strip() for e in match.group(1).split(","))
+    return sorted(needed)
+
+
+def prune_extras(text: str) -> str:
+    """Rewrite [project.optional-dependencies] to keep only the desktop extras."""
+    extras = tomllib.loads(text)["project"]["optional-dependencies"]
+    keep = required_extras(extras, DESKTOP_EXTRAS)
+    header = "[project.optional-dependencies]\n"
+    start = text.index(header) + len(header)
+    end_match = re.compile(r"^\[", re.MULTILINE).search(text, start)
+    end = end_match.start() if end_match else len(text)
+    body = "".join(
+        f"{name} = [{', '.join(json.dumps(req) for req in extras[name])}]\n"
+        for name in keep
+    )
+    return text[:start] + body + "\n" + text[end:]
+
 
 def export_tree(out: Path) -> None:
     """Copy tracked files under INCLUDE (git archive keeps the tree clean)."""
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "src.tar"
         subprocess.run(
-            ["git", "-C", str(REPO), "archive", "--format=tar", "-o", str(archive),
-             "HEAD", "--", *INCLUDE],
+            [
+                "git",
+                "-C",
+                str(REPO),
+                "archive",
+                "--format=tar",
+                "-o",
+                str(archive),
+                "HEAD",
+                "--",
+                *INCLUDE,
+            ],
             check=True,
         )
         with tarfile.open(archive) as tar:
@@ -109,10 +158,8 @@ def main(argv: list[str]) -> int:
     if text.count(REQUIRES_PYTHON) != 1:
         raise SystemExit("pyproject.toml no longer has the expected requires-python")
     text = text.replace(REQUIRES_PYTHON, f'requires-python = "=={python_version}.*"')
-    text += (
-        "\n[tool.uv]\n"
-        f'environments = ["{platform_marker(wheel.name)}"]\n'
-    )
+    text = prune_extras(text)
+    text += f'\n[tool.uv]\nenvironments = ["{platform_marker(wheel.name)}"]\n'
     pyproject.write_text(text, encoding="utf-8")
 
     (out / ".python-version").write_text(f"{python_version}\n", encoding="utf-8")
