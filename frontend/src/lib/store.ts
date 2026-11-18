@@ -108,6 +108,8 @@ interface Settings {
   speechEnabled: boolean;
   voiceOutputEnabled: boolean;
   voiceAutoplay: boolean;
+  // Hands-free mode: listen for the wake word ("Viernes") and answer aloud.
+  handsFree: boolean;
   // IANA time zone for dates in answers; '' = this device's zone.
   timeZone: string;
 }
@@ -125,6 +127,7 @@ function loadSettings(): Settings {
     speechEnabled: false,
     voiceOutputEnabled: false,
     voiceAutoplay: false,
+    handsFree: false,
     timeZone: '',
   };
   try {

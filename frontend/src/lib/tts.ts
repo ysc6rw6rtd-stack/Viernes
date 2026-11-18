@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { synthesizeSpeech, fetchTtsHealth } from './api';
 import { toSpeakableText } from './message-text';
+import { cancelSystemVoice, speakWithSystemVoice, systemVoiceAvailable } from './system-voice';
 
 export type TtsState = 'idle' | 'loading' | 'speaking';
 
@@ -20,6 +21,11 @@ interface TtsStore {
   errorId: string | null;
   /** null until the health probe has answered. */
   available: boolean | null;
+  /**
+   * 'backend' uses the server's TTS; 'system' falls back to the operating
+   * system's voices when the server has none configured.
+   */
+  engine: 'backend' | 'system';
   /** Last message spoken by autoplay, so a re-render never repeats it. */
   autoSpokenId: string | null;
   speak: (id: string, text: string) => Promise<void>;
@@ -53,6 +59,7 @@ export function shouldAutoplayFinishedReply(
 }
 
 function teardown(): void {
+  cancelSystemVoice();
   if (audio) {
     // Detach first: clearing src re-runs the media load algorithm, which fails
     // on an empty source and dispatches an `error` event. With the handler
@@ -80,18 +87,29 @@ export const useTtsStore = create<TtsStore>((set, get) => ({
   error: null,
   errorId: null,
   available: null,
+  engine: 'backend',
   autoSpokenId: null,
 
   ensureHealth: () => {
     if (healthProbe) return healthProbe;
+    const useSystemVoiceIfPossible = () => {
+      if (systemVoiceAvailable()) {
+        set({ available: true, engine: 'system' });
+        return true;
+      }
+      set({ available: false });
+      return false;
+    };
     healthProbe = fetchTtsHealth()
       .then((health) => {
-        set({ available: health.available });
-        if (!health.available) healthProbe = null;
+        if (health.available) {
+          set({ available: true, engine: 'backend' });
+          return;
+        }
+        if (!useSystemVoiceIfPossible()) healthProbe = null;
       })
       .catch(() => {
-        set({ available: false });
-        healthProbe = null;
+        if (!useSystemVoiceIfPossible()) healthProbe = null;
       });
     return healthProbe;
   },
@@ -108,6 +126,23 @@ export const useTtsStore = create<TtsStore>((set, get) => ({
     const mine = token;
     teardown();
     set({ state: 'loading', speakingId: id, error: null, errorId: null });
+
+    if (get().engine === 'system') {
+      set({ state: 'speaking', speakingId: id });
+      try {
+        await speakWithSystemVoice(trimmed);
+        if (mine === token) set({ state: 'idle', speakingId: null });
+      } catch (err) {
+        if (mine !== token) return;
+        set({
+          state: 'idle',
+          speakingId: null,
+          error: err instanceof Error ? err.message : 'Speech synthesis failed',
+          errorId: id,
+        });
+      }
+      return;
+    }
 
     const ac = new AbortController();
     controller = ac;
@@ -165,6 +200,7 @@ export function __resetTtsForTests(): void {
     error: null,
     errorId: null,
     available: null,
+    engine: 'backend',
     autoSpokenId: null,
   });
 }

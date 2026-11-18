@@ -34,14 +34,17 @@ export function ChatArea() {
   // autoSpokenId fences the message so re-renders cannot repeat it.
   const voiceOutputEnabled = useAppStore((s) => s.settings.voiceOutputEnabled);
   const voiceAutoplay = useAppStore((s) => s.settings.voiceAutoplay);
+  // Hands-free mode always answers aloud.
+  const handsFree = useAppStore((s) => s.settings.handsFree);
+  const speakReplies = (voiceOutputEnabled && voiceAutoplay) || handsFree;
   // Probe the backend as soon as voice output is switched on. Without this the
   // first reply could never autoplay: `available` is only set by ensureHealth,
   // which until now ran solely from the per-message read-aloud button -- and
   // that button does not exist until a reply is already on screen.
   useEffect(() => {
-    if (!voiceOutputEnabled) return;
+    if (!voiceOutputEnabled && !handsFree) return;
     useTtsStore.getState().ensureHealth();
-  }, [voiceOutputEnabled]);
+  }, [voiceOutputEnabled, handsFree]);
 
   // Speak on the falling edge of a stream -- the moment a reply finishes -- and
   // never merely because a finished reply happens to be on screen. Opening the
@@ -62,7 +65,7 @@ export function ChatArea() {
     streamingConversationRef.current = isCurrentChatStreaming ? activeId : null;
 
     if (!justFinished) return;
-    if (!voiceOutputEnabled || !voiceAutoplay) return;
+    if (!speakReplies) return;
 
     if (!last || last.role !== 'assistant' || activeId === null) return;
 
@@ -75,7 +78,9 @@ export function ChatArea() {
       const currentTts = useTtsStore.getState();
       const currentLast = app.messages[app.messages.length - 1];
       if (app.activeId !== completedConversationId || app.streamState.isStreaming) return;
-      if (!app.settings.voiceOutputEnabled || !app.settings.voiceAutoplay) return;
+      const wantsVoice = (app.settings.voiceOutputEnabled && app.settings.voiceAutoplay)
+        || app.settings.handsFree;
+      if (!wantsVoice) return;
       if (currentLast?.id !== completedMessageId || currentTts.available !== true) return;
       if (currentTts.autoSpokenId === completedMessageId) return;
 
@@ -84,7 +89,7 @@ export function ChatArea() {
       currentTts.markAutoSpoken(completedMessageId);
       void currentTts.speak(completedMessageId, text);
     });
-  }, [activeId, messages, streamState.isStreaming, isCurrentChatStreaming, voiceOutputEnabled, voiceAutoplay]);
+  }, [activeId, messages, streamState.isStreaming, isCurrentChatStreaming, speakReplies]);
   const currentStreamContent = isCurrentChatStreaming ? streamState.content : '';
 
   // Check if any data sources are connected

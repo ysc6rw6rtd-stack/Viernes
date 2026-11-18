@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Send, Square, Paperclip, Search } from 'lucide-react';
+import { Send, Square, Paperclip, Search, Ear } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppStore, generateId } from '../../lib/store';
 import { streamChat, streamResearch } from '../../lib/sse';
@@ -12,6 +12,8 @@ import {
 } from '../../lib/chat-telemetry';
 import { MicButton } from './MicButton';
 import { useSpeech } from '../../hooks/useSpeech';
+import { useHandsFree, type HandsFreeState } from '../../hooks/useHandsFree';
+import { useTtsStore } from '../../lib/tts';
 import type {
   ChatMessage,
   MessageTelemetry,
@@ -79,6 +81,23 @@ function useResearchCorpusSync(enabled: boolean): {
   return state;
 }
 
+function handsFreeLabel(state: HandsFreeState, answering: boolean, speaking: boolean): string {
+  if (speaking) return 'Hablando…';
+  if (answering) return 'Pensando…';
+  switch (state) {
+    case 'starting':
+      return 'Activando micrófono…';
+    case 'awake':
+      return 'Te escucho…';
+    case 'transcribing':
+      return 'Entendiendo…';
+    case 'error':
+      return 'Micrófono no disponible';
+    default:
+      return 'Di «Viernes» y lo que necesites';
+  }
+}
+
 export function InputArea() {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -90,6 +109,9 @@ export function InputArea() {
   const streamState = useAppStore((s) => s.streamState);
   const messages = useAppStore((s) => s.messages);
   const speechEnabled = useAppStore((s) => s.settings.speechEnabled);
+  const handsFree = useAppStore((s) => s.settings.handsFree);
+  const updateSettings = useAppStore((s) => s.updateSettings);
+  const ttsState = useTtsStore((s) => s.state);
   const maxTokens = useAppStore((s) => s.settings.maxTokens);
   const temperature = useAppStore((s) => s.settings.temperature);
   const createConversation = useAppStore((s) => s.createConversation);
@@ -171,15 +193,15 @@ export function InputArea() {
     resetStream();
   }, [resetStream]);
 
-  const sendMessage = useCallback(async () => {
-    const content = input.trim();
+  const sendMessage = useCallback(async (spoken?: string) => {
+    const content = (spoken ?? input).trim();
     if (!content || streamState.isStreaming) return;
     if (!selectedModel) {
       toast.error('Pick a model first (⌘K)');
       return;
     }
 
-    setInput('');
+    if (spoken === undefined) setInput('');
 
     let convId = activeId;
     if (!convId) {
@@ -554,6 +576,36 @@ export function InputArea() {
     maxTokens,
   ]);
 
+  // Hands-free: "Viernes, <request>" is sent as a message; replies are read
+  // aloud (see ChatArea). Listening pauses while Viernes answers or speaks.
+  const sendMessageRef = useRef(sendMessage);
+  sendMessageRef.current = sendMessage;
+  const handsFreeVoice = useHandsFree({
+    enabled: handsFree,
+    paused: streamState.isStreaming || ttsState !== 'idle',
+    onCommand: (text) => {
+      useAppStore.getState().addLogEntry({
+        timestamp: Date.now(), level: 'info', category: 'chat',
+        message: `Voice command: "${text.slice(0, 80)}"`,
+      });
+      void sendMessageRef.current(text);
+    },
+  });
+  useEffect(() => {
+    if (handsFreeVoice.error) toast.error(handsFreeVoice.error, { duration: 8000 });
+  }, [handsFreeVoice.error]);
+  const toggleHandsFree = () => {
+    if (!handsFree && !speechAvailable) {
+      toast.error('El reconocimiento de voz aún no está listo. Espera a que Viernes termine de arrancar e inténtalo de nuevo.');
+      return;
+    }
+    if (!handsFree && !selectedModel) {
+      toast.error('Elige primero un modelo arriba a la izquierda (Ctrl+K).');
+      return;
+    }
+    updateSettings({ handsFree: !handsFree, speechEnabled: true });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -581,6 +633,26 @@ export function InputArea() {
             <Search size={12} />
             Deep Research
           </button>
+          <button
+            type="button"
+            onClick={toggleHandsFree}
+            aria-pressed={handsFree}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs transition-colors cursor-pointer"
+            style={{
+              background: handsFree ? 'var(--color-accent-subtle)' : 'transparent',
+              border: `1px solid ${handsFree ? 'var(--color-accent)' : 'var(--color-border)'}`,
+              color: handsFree ? 'var(--color-accent)' : 'var(--color-text-tertiary)',
+            }}
+            title={handsFree ? 'Manos libres activado: di «Viernes» y tu petición' : 'Activar manos libres'}
+          >
+            <Ear size={12} />
+            Manos libres
+          </button>
+          {handsFree && (
+            <span className="text-[11px]" style={{ color: 'var(--color-text-tertiary)' }}>
+              {handsFreeLabel(handsFreeVoice.state, streamState.isStreaming, ttsState !== 'idle')}
+            </span>
+          )}
         </div>
         {deepResearch && corpusSync.syncing && corpusSync.itemsSynced > 0 && (
           <div
@@ -632,7 +704,7 @@ export function InputArea() {
               reason={micReason}
             />
             <button
-              onClick={sendMessage}
+              onClick={() => void sendMessage()}
               disabled={streamState.isStreaming || !input.trim() || modelLoading || !selectedModel}
               title={selectedModel ? 'Send message' : 'Pick a model first (⌘K)'}
               className="p-2 rounded-xl transition-colors shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-default"
