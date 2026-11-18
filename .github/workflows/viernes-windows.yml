@@ -47,13 +47,56 @@ jobs:
           cd frontend/src-tauri/scripts && chmod +x download-ollama.sh
           ./download-ollama.sh x86_64-pc-windows-msvc
 
+      # Everything below makes the installer self-contained: users need no
+      # Git, Rust, Visual Studio Build Tools or a separate uv install.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build the Rust extension wheel (Python 3.12)
+        shell: bash
+        run: |
+          uv python install 3.12
+          uvx maturin build --release \
+            -m rust/crates/openjarvis-python/Cargo.toml \
+            -i "$(uv python find 3.12)" -o build/wheels
+
+      - name: Assemble the bundled backend
+        shell: bash
+        run: |
+          WHEEL=$(ls build/wheels/openjarvis_rust-*-cp312-*win_amd64.whl)
+          uv run --no-project --python 3.12 \
+            python scripts/viernes/build_backend_bundle.py build/viernes-backend "$WHEEL" 3.12
+          mkdir -p build/bin
+          cp "$(command -v uv).exe" build/bin/uv.exe 2>/dev/null || cp "$(command -v uv)" build/bin/uv.exe
+
+      - name: Smoke-test the bundled backend
+        shell: bash
+        working-directory: build/viernes-backend
+        run: |
+          # Hide cargo so the test proves no Rust toolchain is needed.
+          export PATH="$(echo "$PATH" | tr ':' '\n' | grep -vi cargo | paste -sd:)"
+          ../bin/uv.exe sync --extra desktop --extra inference-cloud --extra inference-google --group desktop-native
+          ../bin/uv.exe run python -c "import openjarvis_rust; print('openjarvis_rust OK')"
+          ../bin/uv.exe run jarvis --version
+          rm -rf .venv
+
       - name: Write release config
         shell: bash
         run: |
           VERSION="1.0.${{ github.run_number }}"
           echo "VIERNES_VERSION=$VERSION" >> "$GITHUB_ENV"
-          printf '{"version":"%s","bundle":{"externalBin":["binaries/ollama"]}}' "$VERSION" \
-            > frontend/src-tauri/tauri.release.conf.json
+          cat > frontend/src-tauri/tauri.release.conf.json <<JSON
+          {
+            "version": "$VERSION",
+            "bundle": {
+              "externalBin": ["binaries/ollama"],
+              "resources": {
+                "../../build/viernes-backend/": "src/",
+                "../../build/bin/": "bin/"
+              }
+            }
+          }
+          JSON
 
       - name: Build and publish installer
         uses: tauri-apps/tauri-action@v0

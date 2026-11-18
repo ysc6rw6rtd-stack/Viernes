@@ -232,6 +232,25 @@ fn boot_plan(cfg: &InferenceConfig, ram_gb: f64) -> BootPlan {
     }
 }
 
+/// Path of a tool bundled in `bin/` next to the desktop executable, if present.
+fn bundled_tool_path(exe: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+    let file = if cfg!(target_os = "windows") {
+        format!("{name}.exe")
+    } else {
+        name.to_string()
+    };
+    let path = exe.parent()?.join("bin").join(file);
+    path.is_file().then_some(path)
+}
+
+/// Marker written by `scripts/viernes/build_backend_bundle.py`: the backend
+/// ships `openjarvis_rust` as a prebuilt wheel, so no Rust toolchain is needed.
+const PREBUILT_BACKEND_MARKER: &str = ".viernes-prebuilt";
+
+fn backend_needs_rust_toolchain(root: &std::path::Path) -> bool {
+    !root.join(PREBUILT_BACKEND_MARKER).is_file()
+}
+
 /// Get the user home directory, handling both Unix (HOME) and Windows (USERPROFILE).
 fn home_dir() -> String {
     std::env::var("HOME")
@@ -243,6 +262,14 @@ fn home_dir() -> String {
 /// macOS .app bundles don't inherit the shell PATH, so we probe manually.
 fn resolve_bin(name: &str) -> String {
     let home = home_dir();
+
+    // Tools shipped inside the installer (e.g. uv) live in `bin/` beside the
+    // desktop executable and win over anything installed system-wide.
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(bundled) = bundled_tool_path(&exe, name) {
+            return bundled.to_string_lossy().into_owned();
+        }
+    }
 
     // Tauri installs the Windows ARM64 sidecar beside the desktop executable.
     // Prefer the bundled runtime over an unrelated Ollama install on PATH.
@@ -1546,7 +1573,10 @@ async fn boot_backend(backend: SharedBackend, status: SharedStatus) {
     let root = project_root.as_ref().unwrap();
 
     let cargo_bin = resolve_bin("cargo");
-    if !std::path::Path::new(&cargo_bin).exists() && cargo_bin == "cargo" {
+    if backend_needs_rust_toolchain(root)
+        && !std::path::Path::new(&cargo_bin).exists()
+        && cargo_bin == "cargo"
+    {
         let mut s = status.lock().await;
         s.error = Some(format_missing_rust_toolchain());
         return;
@@ -3546,10 +3576,11 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        boot_plan, default_local_model, discard_pending_inference_setup_at,
-        format_extension_import_failure, format_missing_rust_toolchain, format_port_unavailable,
-        format_uv_sync_failure, format_uv_sync_spawn_error, inference_credential_key,
-        managed_cloud_key_names, matching_installed_model, model_names_match, normalize_host,
+        backend_needs_rust_toolchain, boot_plan, bundled_tool_path, default_local_model,
+        discard_pending_inference_setup_at, format_extension_import_failure,
+        format_missing_rust_toolchain, format_port_unavailable, format_uv_sync_failure,
+        format_uv_sync_spawn_error, inference_credential_key, managed_cloud_key_names,
+        matching_installed_model, model_names_match, normalize_host,
         parse_configured_inference_config, parse_ollama_model_names,
         persist_confirmed_inference_config_at, preferred_installed_model,
         project_root_near_executable, reload_cloud_keys_for_owned_backend_at,
@@ -3558,6 +3589,7 @@ mod tests {
         uv_sync_stderr_tail, BackendManager, InferenceConfig, InferenceCredentialStore,
         PendingInferenceCredential, PendingInferenceRollback, SetupStatus, SourceKind,
         CLAUDE_DEFAULT_MODEL, DESKTOP_UV_SYNC_COMMAND, PENDING_INFERENCE_API_KEY,
+        PREBUILT_BACKEND_MARKER,
     };
     use std::collections::HashMap;
     use std::path::Path;
@@ -3613,6 +3645,30 @@ mod tests {
             std::process::id(),
             nonce
         ))
+    }
+
+    #[test]
+    fn bundled_tools_and_prebuilt_backend_are_detected() {
+        let root = unique_test_root("bundled-tools");
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        let exe = root.join(if cfg!(target_os = "windows") {
+            "viernes.exe"
+        } else {
+            "viernes"
+        });
+        assert!(bundled_tool_path(&exe, "uv").is_none());
+        let uv = root.join("bin").join(if cfg!(target_os = "windows") {
+            "uv.exe"
+        } else {
+            "uv"
+        });
+        std::fs::write(&uv, b"").unwrap();
+        assert_eq!(bundled_tool_path(&exe, "uv"), Some(uv));
+
+        assert!(backend_needs_rust_toolchain(&root));
+        std::fs::write(root.join(PREBUILT_BACKEND_MARKER), b"").unwrap();
+        assert!(!backend_needs_rust_toolchain(&root));
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]
